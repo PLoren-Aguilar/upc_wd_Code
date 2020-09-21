@@ -7,82 +7,75 @@
 #         clean   => Limpia los restos de las compilaciones y las ejecuciones
 #=============================================================================================
 
-
-#=============================
-# Code structure
-#=============================
-
-AQUI    = work
-GRAFS   = work/graficos
-#RES     = $(DIR)/Outdata
-#UTIL    = $(DIR)/Utilities
-#GRAFS   = $(DIR)/Grafs
-#IN      = $(DIR)/Indata
-#OUT     = $(DIR)/Outdata
-
 #=============================
 # Main code and executable 
 #=============================
 
 SOURCE  = main.f90      
 TARGET  = sph.e
-#INCL    =-I/usr/local/include 
-#LIBS    = $(INCL) -L/usr/local/lib  -L/opt/intel/composer_xe_2013_sp1.0.080/compiler/lib/intel64/ 
-LIBS    = 
 
 #=============================
 # Define objects
 #=============================
 
-NUCL	= jjose2.o burn.o
-#FOBJS   = mod_essentials.o mod_parameters.o mod_functions.o mod_commons.o             \#
-FOBJS   = mod_parameters.o mod_functions.o mod_commons.o  mod_EOS.o\
-          startout.o inparams.o indata.o                                              \
-	  iter_rhoh.o treeconst.o indexx.o indexxi2.o                                 \
-	  EOS.o EOS0.o helmholtz.o degenerate.o degenerate2.o $(NUCL)                 \
-          relax.o relax_frame.o approach.o separate.o                                 \
-          diagnostics.o outdata.o outdata_ascii.o outchem.o gettime.o energy.o                        \
-	  kickstart.o predcorr.o noninertial.o forces.o varydt.o hydro_rs.o           \
-          predictor.o corrector.o sort.o\
-	  layer.o norm_layer.o putlayer.o                 \
-          genera_single.o genera_bin.o sph.o analysis.o plot.o main.o
-OBJS    = $(FOBJS)
+#NUCL	= jjose2.o burn.o
+OBJS  = mod_parameters.o mod_functions.o mod_commons.o  mod_eos.o                  \
+        startout.o inparams.o indata.o iter_rhoh.o treeconst.o indexx.o indexxi2.o \
+        eos.o eos0.o helmholtz.o degenerate.o degenerate2.o $(NUCL)                \
+        relax.o relax_frame.o approach.o separate.o                                \
+        diagnostics.o outdata.o outchem.o gettime.o energy.o                       \
+	      kickstart.o predcorr.o noninertial.o forces.o varydt.o hydro_rs.o          \
+        predictor.o corrector.o sort.o layer.o norm_layer.o putlayer.o             \
+        genera_single.o genera_bin.o sph.o analysis.o plot.o main.o
 
 #=============================
 #Precompiler options
 #=============================
 ifeq ($(debug), yes)
-    FPPFLAGS += -Ddebug -fpe0 -check all -debug all -traceback
-#    FPPFLAGS += -Ddebug -traceback
+   FPPFLAGS += -Ddebug -fpe0 -check all -debug all -traceback
 endif
 ifeq ($(openmp), yes)
-   PARFLAG   = -openmp
+   PARFLAG   = -qopenmp
    FPPFLAGS += -Dopenmp
 endif
 ifeq ($(Helium),yes)
    FPPFLAGS += -DHelium
 endif
-#PARFLAG   = -openmp
+ifeq ($(global), yes)
+   FPPFLAGS  += -Dglobal
+endif
+ifeq ($(oldformat),yes)
+   FPPFLAGS += -Doldformat
+endif
+
+#=============================
+#Default options
+#=============================
+
+#PARFLAG   = -qopenmp
 #FPPFLAGS += -Dopenmp
-#FPPFLAGS += -Dopenmp -DHelium
 
 #=============================
 #Define Compilers
 #=============================
 
 ifeq ($(MPI), yes)
-FC	= mpifort -O3 -r8 -ipo -mcmodel medium -shared-intel -DMPI $(PARFLAG) $(FPPFLAGS)
+FC	= mpiifort -O3 -xCORE-AVX512 -mcmodel=medium -warn uninitialized -warn truncated_source\
+			-warn interfaces -nogen-interfaces -DMPI $(PARFLAG) $(FPPFLAGS)
 else
-FC      = gfortran $(PARFLAG) $(FPPFLAGS)
+#FC	= ifort -O3 -r8 -xCORE-AVX512 -mcmodel=medium -warn uninitialized -warn truncated_source\
+			-warn interfaces -nogen-interfaces $(PARFLAG) $(FPPFLAGS)
+FC	= gfortran -Dopenmp -fopenmp -fdefault-real-8
 endif
+
 
 #=============================
 #Linking code
 #=============================
 
 $(TARGET):  $(OBJS)
-	$(FC) -o $@ $(OBJS) $(LIBS)
-
+#	$(FC) -o $@ $(OBJS) $(LIBS)
+	$(FC) -o sph.e $(OBJS) -Dopenmp -fopenmp -fdefault-real-8
 
 #=============================
 #Compile code

@@ -1,155 +1,151 @@
-      SUBROUTINE plot
+      subroutine plot
 !========================================================================
 !  This subroutine dumps data in ascii format in order to plot it
 !
 !  Last revision: 14/March/2015
 !========================================================================
-      USE mod_parameters
-      USE mod_commons
+      use mod_parameters
+      use mod_commons
 ! 
 !--Force to declare EVERYTHING
 !
-      IMPLICIT NONE
+      implicit none
 !
 !--Local variables
 !
-      INTEGER :: AllocateStatus, p, k, readnstep
-      CHARACTER(30) :: numstep, filename1, filename2
+      integer       :: AllocateStatus, p, k, readnstep
+      character(30) :: numstep, filename1, filename2
 !
 !--Declare structures in order to read data
 !
-      TYPE :: outdata
-        REAL(4), DIMENSION(ndim+2) :: ioxyzhm
-        REAL(4), DIMENSION(ndim+2) :: iovxyzut
-        REAL(4) :: iorho
-        REAL(4) :: ioka1
-        INTEGER(1) :: iopartype
-        INTEGER(1) :: iostar
-      END TYPE
-      TYPE(outdata), ALLOCATABLE, DIMENSION(:) :: data_array
+      type :: outdata
+        real(4), dimension(ndim+2) :: ioxyzhm
+        real(4), dimension(ndim+2) :: iovxyzut
+        real(4) :: iorho
+        real(4) :: ioka1
+        integer :: iostep
+        integer(1) :: iopartype
+        integer(1) :: iostar
+      end type
+      type(outdata), allocatable, dimension(:) :: data_array
 !
-      TYPE :: coutdata
-        REAL(4), DIMENSION(nel) :: comp
-      END TYPE
-      TYPE(coutdata), ALLOCATABLE, DIMENSION(:) :: cdata_array
+      type :: coutdata
+        real(4), dimension(nel) :: comp
+      end type
+      type(coutdata), allocatable, dimension(:) :: cdata_array
 !
 !--Number of datafile to read?
 !
-      PRINT*, 'Number of datafile to read?'
-      READ*, readnstep
+      print*, 'Number of datafile to read?'
+      read*, readnstep
 !
 !--Open data unit
 !
-      WRITE(numstep,'(i4.4)') readnstep
+      write(numstep,'(i4.4)') readnstep
       filename1 = 'bodi'//trim(numstep)//'.out'
       filename2 = 'comp'//trim(numstep)//'.out'
-      !filename2 = 'comp0001.out'
-      OPEN (1, FILE=filename1, FORM='unformatted')
-      OPEN (2, FILE=filename2, FORM='unformatted')
+      open (1, FILE=filename1, form='unformatted')
+      open (2, FILE=filename2, form='unformatted')
 !
 !--Read time and npart data
 !
-      READ(1) tnow, nstep, npart, nbody, ndead, nbody1, nbody2, Omega0
+      read(1) tnow, npart, nbody, ndead, nbody1, nbody2, Omega0
 !
 !--Allocate space for the bodi and comp data
 !
-      ALLOCATE (data_array(npart), STAT = AllocateStatus)
-      IF (AllocateStatus /= 0) THEN
-         PRINT*, "Not enough memory for data_array!!!"
-         STOP
-      ENDIF
+      allocate (data_array(npart), STAT = AllocateStatus)
+      if (AllocateStatus /= 0) then
+         print*, "Not enough memory for data_array!!!"
+         stop
+      endif
 !
-      ALLOCATE (cdata_array(npart), STAT = AllocateStatus)
-      IF (AllocateStatus /= 0) THEN
-         PRINT*, "Not enough memory for data_array!!!"
-         STOP
-      ENDIF
+      allocate (cdata_array(npart), STAT = AllocateStatus)
+      if (AllocateStatus /= 0) then
+         print*, "Not enough memory for data_array!!!"
+         stop
+      endif
 !
 !--Read bodi and comp data
 !
-      READ(1) data_array
-      READ(2) cdata_array
+      read(1) data_array
+      read(2) cdata_array
 !
 !--Close files
 !
-      CLOSE(UNIT=1)
+      close(unit=1)
 !
 !--Open data unit to write
 !
-      WRITE(numstep,'(i4.4)') readnstep
+      write(numstep,'(i4.4)') readnstep
       filename1 = 'asciibodi'//trim(numstep)//'.out'
       filename2 = 'asciicomp'//trim(numstep)//'.out'
-      !filename2 = 'asciicomp0001.out'
-      OPEN (1, FILE=filename1)
-      OPEN (2, FILE=filename2)
+      open (1, FILE=filename1)
+      open (2, FILE=filename2)
 !
 !--Write time and npart data
 !
-      WRITE(1,*) 'ASPLASH_HEADERLINE_TIME'
-      WRITE(1,*) tnow
-      WRITE(1,*) 'ASPLASH_HEADERLINE_GAMMA'
-      WRITE(1,*) '1.667'
-      !WRITE(1,*) 'Omega0=', Omega0
-      PRINT*, 'Omega0=', Omega0
+      write(1,*) 'ASPLASH_HEADERLINE_TIME'
+      write(1,*) tnow
+      write(1,*) 'ASPLASH_HEADERLINE_GAMMA'
+      write(1,*) '1.667'
 
 ! Find out number of particles of each type
       nHe = 0
       nCO = 0
       ndead = 0
-      DO p = 1,npart
-         SELECT CASE (data_array(p)%iopartype)
-           CASE(0)
+      do p = 1,npart
+         select case (data_array(p)%iopartype)
+           case(0)
              nCO = nCO + 1
-           CASE(1)
+           case(1)
              nHe = nHe + 1
-           CASE(2)
+           case(2)
              ndead = ndead + 1
-         END SELECT
-      ENDDO 
-      WRITE(1,*) 'nCO, nHe, ndead'
-      WRITE(1,*) nCO, nHe, ndead
+         end select
+      enddo 
+      write(1,*) 'nCO, nHe, ndead'
+      write(1,*) nCO, nHe, ndead
 
 ! Change reference frame from co-rotation to intertial
-      DO p=1,npart
-         data_array(p)%iovxyzut(1) = data_array(p)%iovxyzut(1) - data_array(p)%ioxyzhm(2)*Omega0
-         data_array(p)%iovxyzut(2) = data_array(p)%iovxyzut(2) + data_array(p)%ioxyzhm(1)*Omega0
-      ENDDO
+      !do p=1,npart
+      !   data_array(p)%iovxyzut(1) = data_array(p)%iovxyzut(1) - data_array(p)%ioxyzhm(2)*Omega0
+      !   data_array(p)%iovxyzut(2) = data_array(p)%iovxyzut(2) + data_array(p)%ioxyzhm(1)*Omega0
+      !enddo
 
 ! Print CO particles first 
-      DO p=1,npart
-         IF (data_array(p)%iopartype == 0) THEN
-           WRITE(1,'(12(1ES12.4),i3.1,i3.1)') (data_array(p)%ioxyzhm(k),k=1,5), &
+      do p=1,npart
+         if (data_array(p)%iopartype == 0) then
+           write(1,'(12(1ES12.4),i13.10,i3.1,i3.1)') (data_array(p)%ioxyzhm(k),k=1,5), &
            data_array(p)%iorho, (data_array(p)%iovxyzut(k),k=1,5),data_array(p)%ioka1,&
-           data_array(p)%iopartype,data_array(p)%iostar
-         ENDIF
-      ENDDO
+           data_array(p)%iostep,data_array(p)%iopartype+1,data_array(p)%iostar
+         endif
+      enddo
 ! Then He particles
-      DO p=1,npart
-         IF (data_array(p)%iopartype == 1) THEN
-           WRITE(1,'(12(1ES12.4),i3.1,i3.1)') (data_array(p)%ioxyzhm(k),k=1,5), &
+      do p=1,npart
+         if (data_array(p)%iopartype == 1) then
+           write(1,'(12(1ES12.4),i13.10,i3.1,i3.1)') (data_array(p)%ioxyzhm(k),k=1,5), &
            data_array(p)%iorho, (data_array(p)%iovxyzut(k),k=1,5),data_array(p)%ioka1,&
-           data_array(p)%iopartype,data_array(p)%iostar
-         ENDIF
-      ENDDO
+           data_array(p)%iostep,data_array(p)%iopartype+1,data_array(p)%iostar
+         endif
+      enddo
 ! And finally Dead particles
-      DO p=1,npart
-         IF (data_array(p)%iopartype == 2) THEN
-           WRITE(1,'(12(1ES12.4),i3.1,i3.1)') (data_array(p)%ioxyzhm(k),k=1,5), &
+      do p=1,npart
+         if (data_array(p)%iopartype == 2) then
+           write(1,'(12(1ES12.4),i13.10,i3.1,i3.1)') (data_array(p)%ioxyzhm(k),k=1,5), &
            data_array(p)%iorho, (data_array(p)%iovxyzut(k),k=1,5),data_array(p)%ioka1,&
-           data_array(p)%iopartype,data_array(p)%iostar
-         ENDIF
-      ENDDO
+           data_array(p)%iostep,data_array(p)%iopartype+1,data_array(p)%iostar
+         endif
+      enddo
 !
 !--Write composition as well
 !
-      DO p=1,npart
-         !IF (data_array(p)%iorho <= 1.) PRINT*, p,data_array(p)%iorho,cdata_array(p)%comp(2) 
-         WRITE(2,'(16(1ES12.4))') (cdata_array(p)%comp(k),k=1,nel)
-      ENDDO
+      do p=1,npart
+         write(2,'(16(1ES12.4))') (cdata_array(p)%comp(k),k=1,nel)
+      enddo
 !
 !--Close data units
 !
-      CLOSE (1)
-      CLOSE (2)
+      close (1)
+      close (2)
 !      
-      END SUBROUTINE plot
+      end subroutine plot

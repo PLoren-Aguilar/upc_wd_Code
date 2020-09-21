@@ -1,5 +1,6 @@
     1                                :: nstep
 1000.6000000000000                   :: final time in first run  ::
+    0.01                             :: Maximum time-step (in units of orbital period)
     100                              :: steps between outputs ::
     1                                :: SIMTYPE (1:Single star, 2: Binary system)
     T                                :: RELFLAG

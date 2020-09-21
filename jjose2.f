@@ -27,7 +27,7 @@ C----------------------------------------------------------------------
       COMMON/ABUND/XYTOT(NSP,LSHE)
       DIMENSION AMAT2(NSP,NSP)
 
-      REAL*8 ar(NIS),ar11,coefg,coeft
+      REAL ar(NIS),ar11,coefg,coeft
  
       LOGICAL C
 C

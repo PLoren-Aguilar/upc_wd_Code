@@ -1,73 +1,67 @@
-        SUBROUTINE inparams           
+subroutine inparams           
 !=====================================================
 !
 !  This subroutine reads the initial code paameters
 !
-!  Last revision: 15/March/2015
+!  Last revision: 9/April/2019 
 !
 !=====================================================
 !
 !--Load modules
 !
-        USE mod_parameters, ONLY : nel
-        USE mod_commons, ONLY : nstep_infile, tend, nout, SIMTYPE, trelax, &
-                                RELFLAG, nstep, aion, zion
+  use mod_parameters, only : nel
+  use mod_commons   , only : nstep_infile, tend, nout, SIMTYPE, trelax, &
+                             RELFLAG, nstep, aion, zion, dtmaxin, dtmax,&
+                             dt0, dt0in, reset, fixx1, fixy1, fixz1,    &
+                             fixx2, fixy2, fixz2
 !
 !--Force to declare EVERYTHING
 !
-        IMPLICIT NONE
+  implicit none
 !
 !--Local variables
 !
-        INTEGER      :: k, NNNZ
-        CHARACTER(5) :: ONC
-!
-!--Open parameter file
-!
-        OPEN (1,FILE='treepars',STATUS='old')
+  integer      :: k, NNNZ
+  character(5) :: ONC
 !
 !--Read parameters
 !
-        READ(1,*) nstep_infile
-        READ(1,*) tend
-        READ(1,*) nout
-        READ(1,*) SIMTYPE
-        READ(1,*) RELFLAG
-        READ(1,*) trelax   
-!
-!--Initializations        
-!
-!        nstep = nout*(nstep_ini-1)
-!
-!--Close parameter file
-!
-        CLOSE (1)
+  open (1,FILE='treepars',status='old')
+  read(1,*) nstep_infile
+  read(1,*) tend
+  read(1,*) dtmaxin
+  read(1,*) dt0in
+  read(1,*) nout
+  read(1,*) SIMTYPE
+  read(1,*) RELFLAG
+  read(1,*) reset
+  read(1,*) trelax
+  read(1,*) fixx1,fixy1,fixz1
+  read(1,*) fixx2,fixy2,fixz2
+  close (1)
 !
 !--Integration parameters
 !
-        !dtfact   = 0.3d0
-        !dtmp_max = 0.05d0
+  dtmax = 0.0
+  dt0   = 0.0
 !
 !--Read isotopes (neglecting gamma photons)
 !
-        OPEN(4,FILE='ZHELI.10b',STATUS='old')
-!
-        aion(1) = 1.0
-        zion(1) = 1.0
-        isoloop : DO k=1,nel-2
-           READ(4,8050) NNNZ,ONC,aion(k+1),zion(k+1)
-        ENDDO isoloop
-8050    FORMAT(I4,1X,A5,1X,F4.0,1X,F4.0)
-!
-        CLOSE(UNIT=4)
+  open(4,file='ZHELI.10b',status='old')
+  aion(1) = 1.0
+  zion(1) = 1.0
+  isoloop : do k=1,nel-2
+    read(4,8050) NNNZ,ONC,aion(k+1),zion(k+1)
+  enddo isoloop
+8050 format(I4,1X,A5,1X,F4.0,1X,F4.0)
+  close(unit=4)
 !
 !--Read EOS data
 !
-        CALL read_helm_table
+  call read_helm_table
 !
 !--Read nuclear tables
 !
-        CALL RPARAM
-        CALL RNETWORK
-!
-        END SUBROUTINE inparams
+!  call RPARAM
+!  call RNETWORK
+end subroutine inparams

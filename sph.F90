@@ -1,122 +1,115 @@
-      SUBROUTINE sph
+subroutine sph
 !========================================================================
 !  This subroutine is the main driver of the code. It evolves the system
 !  in time using a given integrator method, and prints diagnostics,
 !  whenever necessary
 !
-!  Last revision: 15/March/2015
+!  Last revision: 06/April/2019
 !========================================================================
 !
 !--Load modules
 !
-      USE mod_parameters, ONLY : MASTER, ndim
-      USE mod_commons, ONLY : axyzut, axyzutp, enuc, enucp,             &
-      luminuc, luminucp, dhdt, dhdtp, dtnuc, vxyzut, xyzhm, xss,        &
-      globnmin, globnmax, globnvec, globmax, globdone, rank, size,&
-      nprocs, nstep, nout, dtmp_min, tend, tnow, nbody, npart, ndead,   &
-      partype
+  use mod_parameters, only : MASTER, ndim, maxstep
+  use mod_commons, only : axyzut, axyzutp, enuc, enucp,             &
+      luminuc, luminucp, dhdt, dhdtp, dtnuc, vxyzut, xyzhm, xss,    &
+      globnmin, globnmax, globnvec, globmax, globdone, rank, size,  &
+      nprocs, nstep, nout, tend, tnow, nbody, npart, ndead, partype,&
+      dtmax, RELFLAG, istep, nactive
 ! 
 !--Force to declare EVERYTHING
 !
-      IMPLICIT NONE
+  implicit none
 #ifdef MPI
-      INCLUDE 'mpif.h'
+  include 'mpif.h'
 #endif
 !
 !--Local definitions
 !
-      REAL, DIMENSION(ndim)  :: cmp1, cmp2
-      REAL    :: omega, cm_d, deldis, masa1, masa2, t1, t2, avgt
-      INTEGER :: p, k, nwrite, ierr, nCO, nHe
-      LOGICAL :: FINISH
+  real, dimension(ndim)  :: cmp1, cmp2
+  real    :: omega, cm_d, deldis, masa1, masa2, t1, t2, avgt
+  integer :: p, k, ierr, nCO, nHe
+  logical :: finish
 !
 !--Startout MPI, if necessary
 !
 #ifdef MPI
-      CALL MPI_INIT(ierr)
-      CALL MPI_COMM_SIZE(MPI_COMM_WORLD,size,ierr)
-      CALL MPI_COMM_RANK(MPI_COMM_WORLD,rank,ierr)
+  call MPI_INIT(ierr)
+  call MPI_COMM_SIZE(MPI_COMM_WORLD,size,ierr)
+  call MPI_COMM_RANK(MPI_COMM_WORLD,rank,ierr)
 #else
-      size = 1
-      rank = MASTER
+  size = 1
+  rank = MASTER
 #endif
-      nprocs = size
-      !IF (size.NE.nprocs) THEN
-      !   PRINT*, 'fatal error: nprocs',nprocs,' != ',size,' np'
-      !   STOP
-      !ENDIF
+  nprocs = size
 !
 !--Startout the code reading the necessary data files and parameters
 !
-      CALL startout
-      nCO   = 0
-      nHe   = 0
-      ndead = 0
-      DO p=1,npart
-         IF (partype(p) == 0) nCO   = nCO + 1
-         IF (partype(p) == 1) nHe   = nHe + 1
-         IF (partype(p) == 2) ndead = ndead + 1
-      END DO
-      nbody = npart - ndead
-      PRINT*, 'nCO=',nCO,' nHe=',nHe,' ndead=',ndead
-
+  call startout
+  nCO   = 0
+  nHe   = 0
+  ndead = 0
+!$omp parallel default(none) shared(npart,partype) private(p) &
+!$omp reduction(+:nCO) reduction(+:nHe) reduction(+:ndead) 
+!$omp do schedule(runtime)
+  do p=1,npart
+    if (partype(p) == 0) nCO   = nCO   + 1
+    if (partype(p) == 1) nHe   = nHe   + 1
+    if (partype(p) == 2) ndead = ndead + 1
+  end do
+!$omp end do
+!$omp end parallel
+  nbody = npart - ndead
+  nstep = 0
 !
 !--Kickstart the integrator
 !
-      CALL kickstart
+  call kickstart
 !
-!--Get time
+!--Relax the system a first time
 !
-      CALL gettime(t1)
+  call relax
 !
 !--Main time evolution loop
 !
-      nwrite = nstep
-      FINISH = .false.
-      timeloop : DO WHILE (FINISH.EQV..false.)
+  nstep  = nstep + 1
+  finish = .false.
+  timeloop : do while (finish.eqv..false.)
 !
-         tnow  = tnow + dtmp_min
-         nstep = nstep + 1
+!--Advance time
 !
-!--Print timestep information
-!
-         IF (rank == MASTER) THEN
-            WRITE(*,'(a,i4,a,i4,a,1pe12.4,a,1pe12.4)') 'step = ',       &
-            nstep-nwrite,' out of ',nout,' tnow =',tnow,' dt =',dtmp_min
-         ENDIF
+    tnow  = tnow  + dtmax
 !
 !--Evolve system a step
 !
-         CALL predcorr
+    call predcorr
 !
-!--Relax system if necessary
+!--Sort particles by particle type to avoid killed ones
 !
-         CALL relax
+    call sort
 !
 !--Calculate diagnostics and write outputs
 !
-         CALL gettime(t2)
-         CALL diagnostics(t1,t2)
-         CALL gettime(t1)
+    call diagnostics
+!
+!--Print time-step information and advance time-step
+!
+    if (rank == MASTER) then
+      write(*,'(a,i4,a,1pe12.4,a,1pe12.4)') 'step = ', nstep,' tnow =',tnow,' dtmax =',dtmax
+    endif
+    nstep = nstep + 1
 !
 !--Check if simulation has ended
 !
-         IF (tnow > tend) FINISH = .true.
-!
-!--Update nstep
-!
-         IF (nstep-nwrite == nout) nwrite = nstep
-      END DO timeloop 
+    if (tnow > tend) finish = .true.
+  end do timeloop 
 !
 !--Ouput data for the last time
 !
-      IF (nstep-nwrite /= nout) nstep = nwrite + nout
-      CALL gettime(t2)
-      CALL diagnostics(t1,t2)
+  call diagnostics
 !
 !--Stop MPI
 !
 #ifdef MPI
-      CALL MPI_FINALIZE(ierr)
+  call MPI_FINALIZE(ierr)
 #endif
-      END SUBROUTINE sph
+end subroutine sph

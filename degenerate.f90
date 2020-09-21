@@ -1,54 +1,50 @@
-      SUBROUTINE degenerate(p)
+      subroutine degenerate(p)
 !========================================================================
-!     THIS   SUBROUTINE   ALLOWS   TO  SELECT   BETWEEN  THE DIFFERENT  
-!     EQUATIONS  OF  STATE  OF  THE  CODE. IT'S IMPORTANT  TO  REALIZE  
-!     THAT  EVERY  EOS  SUBROUTINE MUST PROVIDE (AT LEAST):
+!     THIS   subroutine CALLS THE EQUATION OF  STATE  OF  THE  CODE. 
+!     IT'S IMPORTANT  TO  realIZE  THAT  EVERY  EOS  subroutine MUST 
+!     PROVIDE (AT LEAST):
 !
-!     * TEMPERATURE, PRESSURE, Cv AND SPEED OF SOUND
+!     * TEMPERATURE, PRESSURE, Cv and SPEED OF SOUND
 !
-!     Last revision: 15/March/2015!
+!     Last revision: 21/March/2017
 !=========================================================================
 !
 !--Load modules
 !
-      USE mod_parameters, ONLY : uden, unm, uen, up, uv, unl, tmin, tmax,&
+      use mod_parameters, only : uden, unm, uen, up, uv, unl, tmin, tmax,&
       ndim, nel, MASTER
-      USE mod_commons, ONLY : rho, xss, aion, zion, vxyzut, press, css, &
+      use mod_commons, only : rho, xss, aion, zion, vxyzut, press, css, &
       cvs, dPdT, cps, rank
-      USE mod_EOS
+      use mod_EOS
 !
 !--Force to declare EVERYTHING
 !
-      IMPLICIT NONE
-!
-!--Helmholtz EOS definitions
-!
-!      INCLUDE 'vector_eos.dek'
+      implicit none
 !
 !--I/O variables
 !
-      INTEGER, INTENT(IN) :: p
+      integer, intent(in) :: p
 !
 !--Local variables
 !
-!      REAL(8), DIMENSION(1) :: ewant_row
-      REAL(8)  :: abar, zbar
-      INTEGER :: k
+      real  :: abar, zbar
+      integer  :: k
 !
-!--Set initial data for the EOS
+!--Set temperature and density
 !
-      IF (vxyzut(5,p).GT.tmax) vxyzut(5,p) = tmax
-      IF (vxyzut(5,p).LT.tmin) vxyzut(5,p) = tmin
-!
+      if (vxyzut(5,p) > tmax) vxyzut(5,p) = tmax
+      if (vxyzut(5,p) < tmin) vxyzut(5,p) = tmin
       temp_row(1)  = vxyzut(5,p)
       den_row(1)   = rho(p)*uden    ! EOS works in cgs units!!!
 !
+!--Set composition
+!
       abar = 0.0
       zbar = 0.0
-      DO k=1,nel-1
+      do k=1,nel-1
          abar = abar + xss(k,p)/aion(k)
          zbar = zbar + xss(k,p)*zion(k)/aion(k)
-      ENDDO
+       enddo
       abar_row(1) = 1.0/abar
       zbar_row(1) = zbar/abar
 !
@@ -59,8 +55,11 @@
 !
 !--Call EOS to obtain a first estimate for energy, pressure and derivatives
 !
-      CALL helmeos
-      IF (rank.EQ.MASTER.AND.eosfail.EQV..true.) PRINT*,'EOScorr fail'
+      call helmeos
+      if ((rank == MASTER) .and. (eosfail.eqv..true.)) then
+        write(*,*) 'EOS fail'
+        stop
+      endif
 !
       vxyzut(4,p) = etot_row(1)*(unm/uen)
       press(p) = ptot_row(1)/up
@@ -69,4 +68,4 @@
       dPdT(p)  = dpt_row(1)*(unl**3/uen)
       cps(p)   = cp_row(1)/(uen/unm)
 !
-      END SUBROUTINE degenerate
+      end subroutine degenerate

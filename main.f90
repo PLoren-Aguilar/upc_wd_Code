@@ -1,9 +1,10 @@
-        PROGRAM main
+program main
 !----------------------------------------------------------------
 !
-!     PROGRAM FOR HYDRODYNAMICAL CALCULATIONS USING SPH AND A 
-!     BINARY TREE FOR GRAVITY AND NEIGHBOR SEARCHING. THE PRESENT
-!     VERSION SUPPORTS OpenMP+MPI PARALLELIZATION
+!     Program for hydrodynamicsl calculations using SPH and a 
+!     binary tree for gravity and neighbour searching. The present
+!     version supports OpenMP+MPI parallelization, the presence
+!     of a He layer and invividual time-steps
 !
 !     AUTHORS: * Jordi Isern Vilaboy
 !              * Enrique Garcia-Berro
@@ -12,7 +13,7 @@
 !              * Alba Gutierrez-Pedemonte
 !              * Gabriela Aznar-Siguan
 !
-!     The code has tree working modes:
+!     The code has several working modes:
 !
 !     * single: Generates a initial WD model by solving the 
 !               Lane-Embden equation. A parameter file called
@@ -22,38 +23,49 @@
 !               models. The initial parameters for the binary
 !               system will be entered by hand
 !
-!     * run: Starts the main SPH code. The code will be run in
-!            different modes according to the parameters provided
-!            through the parameters file called treepars 
+!     * run:    Starts the main SPH code. The code will be run in
+!               different modes according to the parameters provided
+!               through the parameters file called treepars 
 !
-!     Last revision: 15/March/2015
+!     * analysis: Calls the subroutine "analysis", useful to perform
+!                 any analysis to a particular time-step
+!
+!     * putlayer: Puts a He layer on the top of a (ideally relaxed) WD
+!
+!     * separate: Used to separate a pair of WDs on a binary system
+!
+!     * plot:     Transforms the binary output into an ASCII file
+!                 suitable for plotting
+!
+!     Last revision: 6/April/2019
 !
 !----------------------------------------------------------------
 !
 !--Load modules
 !
-        USE mod_commons, ONLY : mode
+  use mod_commons, only : mode
 !
 !--Force to declare EVERYTHING
 !
-        IMPLICIT NONE
+  implicit none
 !
 !--Setup running mode
 !
-        CALL getarg(1,mode(1))
-        IF (mode(1).NE.'single'.AND.mode(1).NE.'binary'.AND.mode(1).NE.'ejecta'.AND.  &
-            mode(1).NE.'run'.AND.mode(1).NE.'analysis'.AND.mode(1).NE.  &
-            'putlayer'.AND.mode(1).NE.'separate'.AND.mode(1).NE.'plot') THEN
-            PRINT*, 'BAD RUNNING MODE!'
-            STOP
-        ENDIF
-!
-        IF (mode(1).EQ.'single')   CALL genera_single
-        IF (mode(1).EQ.'binary')   CALL genera_bin
-        IF (mode(1).EQ.'run')      CALL sph
-        IF (mode(1).EQ.'analysis') CALL analysis
-        IF (mode(1).EQ.'putlayer') CALL putlayer
-        IF (mode(1).EQ.'separate') CALL separate
-        IF (mode(1).EQ.'plot')     CALL plot
-!
-        END
+  call getarg(1,mode(1))
+  if ( (mode(1) /= 'single')   .and. (mode(1) /= 'binary')   .and. &
+       (mode(1) /= 'run')      .and. (mode(1) /= 'analysis') .and. &
+       (mode(1) /= 'putlayer') .and. (mode(1) /= 'separate') .and. &
+       (mode(1) /= 'plot') ) then
+    print*, 'BAD RUNNING MODE!'
+    stop
+  endif
+
+  if (mode(1) == 'single')   call genera_single
+  if (mode(1) == 'binary')   call genera_bin
+  if (mode(1) == 'run')      call sph
+  if (mode(1) == 'analysis') call analysis
+  if (mode(1) == 'putlayer') call putlayer
+  if (mode(1) == 'separate') call separate
+  if (mode(1) == 'plot')     call plot
+
+end program main

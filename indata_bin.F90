@@ -1,4 +1,4 @@
-      SUBROUTINE indata
+      subroutine indata
 !===================================================================
 !  This subroutine reads the initial data.
 !
@@ -7,68 +7,68 @@
 !
 !--Load modules
 !
-      USE mod_essentials
-      USE mod_commons
+      use mod_essentials
+      use mod_commons
 !     
 !--Force to declare EVERYTHING
 !
-      IMPLICIT NONE
+      implicit none
 !
 !--Local variables
 !
-      REAL, DIMENSION(npart) :: temporal 
-      REAL :: real_factor,cmx,cmy,cmz
-      INTEGER, DIMENSION(npart) :: itemporal 
-      INTEGER ::  p, k, nums, m
-      CHARACTER(30) :: filename
+      real, dimension(npart) :: temporal 
+      real :: real_factor,cmx,cmy,cmz
+      integer, dimension(npart) :: itemporal 
+      integer ::  p, k, nums, m
+      character(30) :: filename
 !
 !--Declare structures in order to read data
 !
-      TYPE :: outdata
-        REAL, DIMENSION(ndim+2) :: ioxyzhm
-        REAL, DIMENSION(ndim+2) :: iovxyzut
-        REAL :: iorho
-        REAL :: ioka1
-        INTEGER(1) :: iopartype
-        INTEGER(1) :: iostar
-      END TYPE
-      TYPE(outdata), DIMENSION(npart) :: data_array
+      type :: outdata
+        real, dimension(ndim+2) :: ioxyzhm
+        real, dimension(ndim+2) :: iovxyzut
+        real :: iorho
+        real :: ioka1
+        integer(1) :: iopartype
+        integer(1) :: iostar
+      end type
+      type(outdata), dimension(npart) :: data_array
 !
-      TYPE :: coutdata
-        REAL, DIMENSION(nel) :: comp
-      END TYPE
-      TYPE(coutdata), DIMENSION(npart) :: cdata_array
+      type :: coutdata
+        real, dimension(nel) :: comp
+      end type
+      type(coutdata), dimension(npart) :: cdata_array
 !
 !--Open data unit
 !
-      WRITE(filename,'(a,i4.4,a)') 'bodi',nstep_ini,'.out'
-      OPEN (1, FILE=filename, FORM='unformatted')
-      WRITE(filename,'(a,i4.4,a)') 'comp',nstep_ini,'.out'
-      OPEN (2, FILE=filename, FORM='unformatted')
+      write(filename,'(a,i4.4,a)') 'bodi',nstep_ini,'.out'
+      open (1, FILE=filename, form='unformatted')
+      write(filename,'(a,i4.4,a)') 'comp',nstep_ini,'.out'
+      open (2, FILE=filename, form='unformatted')
 !
 !--Read bodi data
 !
-      READ(1) tnow, nums, data_array
+      read(1) tnow, nums, data_array
 !
 !--Check if the number of particles is consistent
 !
-      IF (nums /= npart) THEN
-         IF (rank == MASTER) PRINT*, 'nparts NE nbody!!!'
-         STOP
-      ENDIF
+      IF (nums /= npart) then
+         IF (rank == MASTER) print*, 'nparts NE nbody!!!'
+         stop
+       endif
 !
 !--Composition data
 !
-      READ(2) cdata_array
+      read(2) cdata_array
 !
 !--Close files
 !
-      CLOSE(UNIT=1)
-      CLOSE(UNIT=2)
+      close(unit=1)
+      close(unit=2)
 !
 !--Transfer data into the appropriate locations
 !
-      DO p = 1,npart
+      do p = 1,npart
          xyzhm(1:ndim+2,p)  = data_array(p)%ioxyzhm(1:ndim+2)
          vxyzut(1:ndim+2,p) = data_array(p)%iovxyzut(1:ndim+2)
          rho(p)             = data_array(p)%iorho
@@ -76,7 +76,7 @@
          partype(p)         = data_array(p)%iopartype
          star(p)            = data_array(p)%iopartype
          xss(1:nel,p)       = cdata_array(p)%comp(1:nel)
-      ENDDO
+      enddo
 !
 !--Start up variables
 !
@@ -89,19 +89,19 @@
       tscnuc  = 0.0d0
 !
       eps = 1d30
-      DO p = 1, npart
+      do p = 1, npart
          eps = MIN(eps,xyzhm(4,p))
          ilist(p)  = p
          plist(p)  = p
-      ENDDO
+      enddo
       eps  = 1.4d0*2.d0*eps
       eps3 = eps*eps*eps
 !
 !--Sort particle list to get rid of dead particles
 !
-      CALL sort
+      call sort
 #ifdef debug
-      IF (rank == MASTER) PRINT*, 'sort called'
+      IF (rank == MASTER) print*, 'sort called'
 #endif
 !
-      END SUBROUTINE indata
+      end subroutine indata

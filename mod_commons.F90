@@ -1,4 +1,4 @@
-        MODULE mod_commons
+module mod_commons
 !===================================================================
 !  This module contains all the common variables of the code
 !
@@ -27,69 +27,54 @@
 ! * enuc    = Contains the nuclear energy per unit mass
 ! * eneutr  = Contains the neutrino energy per unit mass?
 !===================================================================
-        USE mod_parameters, ONLY : nel
+  use mod_parameters, only : nel, ndim
 !
 !--Real matrices
 !
-        REAL, ALLOCATABLE, DIMENSION(:,:) :: xyzhm, xyzhmp, xss, vxyzut,&
-        vxyzutp, axyzut, axyzutp,  gxyzu, gxyzup, rotforc
-
-        !REAL, DIMENSION(5,maxnode) :: xyzhm, xyzhmp
-        !REAL, DIMENSION(nel,npart) :: xss
-        !REAL, DIMENSION(5,npart)   :: vxyzut, vxyzutp, axyzut,          &
-        !                              axyzutp
-        !REAL, DIMENSION(4,npart)   :: gxyzu, gxyzup
-        !REAL, DIMENSION(3,npart)   :: rotforc
+  real, allocatable, dimension(:,:) :: xyzhm, xyzhmp, xss, vxyzut,&
+        vxyzutp, axyzut, axyzutp,  gxyzu, gxyzup, rotforc, fix
 !
 !--Real vectors
 !
-        REAL, ALLOCATABLE, DIMENSION(:) :: cur, div, divt, dtem, dtemp, &
+  real, allocatable, dimension(:) :: cur, div, divt, dtem, dtemp,       &
         vsigmax, ka1, fh, cvs, css, press, tem, dPdT, enuc, eneutr, rho,&
         tscdyn, tscnuc, luminuc, cps, uintprev, enucp, luminucp, dhdtp, &
         dhdt, dtnuc, norm, rhoG
-!
-        REAL, DIMENSION(nel-1) :: aion, zion    
-
-        !REAL, DIMENSION(npart) :: cur, div, divt, dtem, dtemp,          &
-        !vsigmax, ka1, fh, cvs, css, press, tem, dPdT, enuc, eneutr, rho,&
-        !tscdyn, tscnuc, luminuc, cps, uintprev, enucp, luminucp, dhdtp, &
-        !dhdt, dtnuc, error, norm, rhoG
-        !REAL, DIMENSION(nel-1) :: aion, zion
+  real, dimension(nel-1) :: aion, zion
 !
 !--Real numbers
 !
-        REAL :: eps, eps3, globmax, Omega0, tnow, tend, dtmp_min,       &
-        trelax, gamma
+  real :: eps, eps3, globmax, Omega01, Omega02, dtmax, dtmaxin, tnow, tend, &
+          trelax, gamma, dt0, dt0in, fixx1, fixy1, fixz1, fixx2,            &
+          fixy2, fixz2, Omega0, ttot, tpred, tirho, tEOS,                   &
+          thydro, tforc, tcorr, tdt, tsort, ttree1, ttree2, tnuc
 !
 !--Integer matrices
 !
-        INTEGER, ALLOCATABLE, DIMENSION(:,:) :: nb 
-
-        !INTEGER, DIMENSION(nbmax,npart)  :: nb 
+  integer, allocatable, dimension(:,:) :: nb 
 !
 !--Integer vectors
 !
-        INTEGER, ALLOCATABLE, DIMENSION(:) :: ilist, plist
-        INTEGER, ALLOCATABLE, DIMENSION(:) :: partype, eosflag, star
-!        
-        !INTEGER(1), DIMENSION(npart) :: partype, star, ilist, plist
+  integer, allocatable, dimension(:) :: ilist, plist, step, istep0
+  integer, allocatable, dimension(:) :: partype, eosflag, star
 !
 !--Default integer numbers
 !
-        INTEGER :: globnmin, globnmax, globnvec, globdone, nstep,       &
-        nstep_ini, nstep_infile, nout, nbody, nCO, nHe, ndead, factor,  &
-        nbody1, nbody2, nbmax, nbmin, mmax, npart
+  integer :: globnmin, globnmax, globnvec, globdone, nstep,                  &
+             nstep_ini, nstep_infile, nout, nbody, nCO, nHe, ndead, factor,  &
+             nbody1, nbody2, nbmax, nbmin, mmax, npart, istep, nactive,      &
+             npart0, npart1, nextstep
 !
 !--Integer numbers
 !
-        INTEGER :: SIMTYPE, SETTYPE, ierr, size, rank, nprocs
+  integer :: SIMTYPE, SETTYPE, ierr, size, rank, nprocs
 !
 !--Logical
 !
-        LOGICAL :: RELFLAG, balsara, visvar
+  logical, allocatable, dimension(:) :: active, pseudoactive
+  logical :: RELFLAG, balsara, visvar, reset, SYNC
 !
 !--Character
 !
-        CHARACTER(30) :: mode(1)
-
-        END MODULE mod_commons
+  character(30) :: mode(1)
+end module mod_commons

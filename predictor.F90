@@ -1,125 +1,123 @@
-      SUBROUTINE predictor
+subroutine predictor
 !============================================================
-!
 !  This subroutine predicts in time the integrated quantities 
 !
-!  Last revision: 15/March/2015
-!
+!  Last revision: 6/April/2019
 !============================================================
 !
 !--Load modules
 !
-      USE mod_parameters, ONLY : ndim
-      USE mod_parameters, ONLY : tmin, tmax
-      USE mod_commons, ONLY : uintprev, vxyzut, axyzutp, dtmp_min,      &
-                              enucp, luminucp, xyzhm, dhdtp, eps, eps3, &
-                              xyzhmp, vxyzutp, nbody, RELFLAG
+  use mod_parameters, only : ndim
+  use mod_parameters, only : tmin, tmax, maxstep
+  use mod_commons,    only : uintprev, vxyzut, axyzutp, enucp, luminucp, xyzhm, &
+                             dhdtp, eps, eps3, xyzhmp, vxyzutp, nbody, RELFLAG, &
+                             step, istep, istep0, dtmax, SIMTYPE
 !
 !--Force to declare EVERYTHING
 !
-      IMPLICIT NONE
+  implicit none
 !
 !--Local variables
 !
-      INTEGER :: p, k
+  real    :: dt
+  integer :: p, k
 !
 !--Save thermal energy for later use
 !
-!$OMP PARALLEL DEFAULT(none) shared(nbody,uintprev,vxyzutp) private(p)
-!$OMP DO SCHEDULE(runtime)
-      DO p=1,nbody
-         uintprev(p) = vxyzutp(4,p)
-      ENDDO
-!$OMP END DO
-!$OMP END PARALLEL
+!$omp parallel default(none) shared(nbody,uintprev,vxyzutp) private(p)
+!$omp do schedule(runtime)
+  do p=1,nbody
+     uintprev(p) = vxyzutp(4,p)
+  enddo
+!$omp end do
+!$omp end parallel
 !
 !--Evolve positions
 !
-      DO k=1,ndim
-!$OMP PARALLEL DEFAULT(none) shared(nbody,xyzhm,vxyzut,vxyzutp,dtmp_min) &
-!$OMP shared(xyzhmp,axyzutp,k) private(p)
-!$OMP DO SCHEDULE(runtime)
-         DO p=1,nbody
+  do k=1,ndim
+!$omp parallel default(none) shared(nbody,xyzhm,vxyzut,vxyzutp) &
+!$omp shared(xyzhmp,axyzutp,k,dtmax,istep,istep0,step) private(p,dt)
+!$omp do schedule(runtime)
+    do p=1,nbody
+       dt = dtmax*float(istep - istep0(p))/float(maxstep)
 #ifdef Helium
-            xyzhm(k,p) = xyzhmp(k,p) + 0.5*vxyzutp(k,p)*dtmp_min
+       xyzhm(k,p) = xyzhmp(k,p) + 0.5*vxyzutp(k,p)*dt
 #else
-            xyzhm(k,p) = xyzhm(k,p) + vxyzut(k,p)*dtmp_min +            &
-                         0.5d0*axyzutp(k,p)*dtmp_min*dtmp_min
+       xyzhm(k,p) = xyzhmp(k,p) + vxyzutp(k,p)*dt + 0.5*axyzutp(k,p)*dt*dt
 #endif
-         ENDDO
-!$OMP END DO
-!$OMP END PARALLEL
-      ENDDO 
+    enddo
+!$omp end do
+!$omp end parallel
+  enddo 
 !
 !--Evolve velocities
 !
-      DO k=1,ndim
-!$OMP PARALLEL DEFAULT(none) shared(nbody,vxyzut,axyzutp,dtmp_min,k) &
-!$OMP shared(vxyzutp) private(p)
-!$OMP DO SCHEDULE(runtime)
-         DO p=1,nbody
+  do k=1,ndim
+!$omp parallel default(none) shared(nbody,vxyzut,axyzutp,k) &
+!$omp shared(vxyzutp,dtmax,istep,istep0,step) private(p,dt)
+!$omp do schedule(runtime)
+     do p=1,nbody
+        dt = dtmax*float(istep - istep0(p))/float(maxstep)
 #ifdef Helium
-            vxyzut(k,p) = vxyzutp(k,p) + 0.5*axyzutp(k,p)*dtmp_min
+        vxyzut(k,p) = vxyzutp(k,p) + 0.5*axyzutp(k,p)*dt
 #else
-            vxyzut(k,p) = vxyzut(k,p) + axyzutp(k,p)*dtmp_min
+        vxyzut(k,p) = vxyzutp(k,p) + axyzutp(k,p)*dt
 #endif
-         ENDDO
-!$OMP END DO
-!$OMP END PARALLEL
-      ENDDO
+     enddo
+!$omp end do
+!$omp end parallel
+  enddo
 !
 !--Evolve thermal energies and temperatures, if necessary
 !
-!$OMP PARALLEL DEFAULT(none) shared(nbody,vxyzut,axyzutp,dtmp_min) &
-!$OMP shared(enucp,luminucp,RELFLAG,vxyzutp) private(p)
-!$OMP DO SCHEDULE(runtime)
-      DO p=1,nbody
+!$omp parallel default(none) shared(nbody,vxyzut,axyzutp,SIMTYPE) &
+!$omp shared(enucp,luminucp,RELFLAG,vxyzutp,dtmax,istep,istep0,step) private(p,dt)
+!$omp do schedule(runtime)
+  do p=1,nbody
+     dt = dtmax*float(istep - istep0(p))/float(maxstep)
 #ifdef Helium
-         vxyzut(4,p) = vxyzutp(4,p) + 0.5*axyzutp(4,p)*dtmp_min +       &
-                       enucp(p)
+     vxyzut(4,p) = vxyzutp(4,p) + 0.5*axyzutp(4,p)*dt + enucp(p)
 #else
-         IF ((vxyzut(5,p) > tmin).AND.(vxyzut(5,p) < tmax)) THEN
-            vxyzut(4,p) = vxyzut(4,p) + axyzutp(4,p)*dtmp_min +         &
-                       enucp(p)
-         ENDIF
+     if ((vxyzut(5,p) > tmin).and.(vxyzut(5,p) < tmax)) then
+        vxyzut(4,p) = vxyzutp(4,p) + axyzutp(4,p)*dt + enucp(p)
+     endif
 #endif
-      ENDDO
-!$OMP END DO
+  enddo
+!$omp end do
 
-      IF (RELFLAG.EQV..false.) THEN
-!$OMP DO SCHEDULE(runtime)
-         DO p=1,nbody
+  if (RELFLAG.eqv..false.) then
+!$omp do schedule(runtime)
+     do p=1,nbody
+        dt = dtmax*float(istep - istep0(p))/float(maxstep)
 #ifdef Helium
-            vxyzut(5,p) = vxyzutp(5,p) + 0.5*axyzutp(5,p)*dtmp_min +    &
-                          luminucp(p)
+        vxyzut(5,p) = vxyzutp(5,p) + 0.5*axyzutp(5,p)*dt + luminucp(p)
 #else
-            vxyzut(5,p) = vxyzut(5,p) + axyzutp(5,p)*dtmp_min +         &
-                          luminucp(p)
+        vxyzut(5,p) = vxyzutp(5,p)  + axyzutp(5,p)*dt + luminucp(p)
 #endif
-         ENDDO
-!$OMP END DO
-      ENDIF
-!$OMP END PARALLEL
+     enddo
+!$omp end do
+  endif
+!$omp end parallel
 !
 !--Save eps for late use
 !
-      eps = 1.0d30
-!$OMP PARALLEL DEFAULT(none) shared(nbody,xyzhm) private(p)  &
-!$OMP reduction(MIN:eps)
-!$OMP DO SCHEDULE(runtime)
-      DO p=1,nbody
-         eps  = MIN(eps,xyzhm(4,p))
-      ENDDO
-!$OMP END DO
-!$OMP END PARALLEL
-      eps  = 1.4d0*2.0d0*eps
-      eps3 = eps*eps*eps
+  eps = 1.0d30
+!$omp parallel default(none) shared(nbody,xyzhm) private(p)  &
+!$omp reduction(MIN:eps)
+!$omp do schedule(runtime)
+  do p=1,nbody
+     eps  = MIN(eps,xyzhm(4,p))
+  enddo
+!$omp end do
+!$omp end parallel
+  eps  = 1.4d0*2.0d0*eps
+  eps3 = eps*eps*eps
 !
 !--Correct He layer velocity
 !
-#ifdef Helium
-         CALL norm_layer
-         CALL layer
-#endif
+!#ifdef Helium
+  call norm_layer
+  call layer
+!#endif
 !
-      END SUBROUTINE predictor
+end subroutine predictor

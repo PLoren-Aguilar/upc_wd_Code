@@ -1,4 +1,4 @@
-      SUBROUTINE relax
+subroutine relax
 !===================================================================
 !
 !  This subroutine relaxes the system whenever necessary.
@@ -9,46 +9,36 @@
 !
 !--Load modules
 !
-      USE mod_parameters, ONLY : MASTER
-      USE mod_commons, ONLY : RELFLAG, rank, SIMTYPE, nstep, nout
+  use mod_parameters, only : MASTER
+  use mod_commons,    only : RELFLAG, rank, SIMTYPE, nstep, nout
 !
 !--Force to declare EVERYTHING
 !
-      IMPLICIT NONE
+  implicit none
 !
 !--Local variables
 !
-      LOGICAL FINISH
-!
-!--Choose between single and binary system relaxation
-!
-      IF (RELFLAG.EQV..true.) THEN
+  logical :: FINISH
 !
 !--In case of binary relaxation, slowly approach stars 
 !  until Roche-Lobe overflow is achieved
 !
-         IF (SIMTYPE.EQ.2) THEN
+  if (SIMTYPE == 2) then
+! Note that after removing the distance, the systems needs to
+! relax, so we will only reduce the distance every nout time steps
+    call approach(0.0,FINISH)
 !
-!--Note that after removing the distance, the systems needs to
-!  relax, so we will only reduce the distance every nout time
-!  steps
-!
-            IF (MOD(nstep,nout).EQ.0) THEN
-               CALL approach(0.01,FINISH)
-            ENDIF
-!
-            IF (FINISH.EQV..TRUE.) THEN
-               PRINT*, 'Binary relaxation finished'
-               STOP
-            ENDIF
-         ENDIF           ! End of SIMTYPE IF
+    if (FINISH.eqv..true.) then
+      print*, 'Binary relaxation finished'
+      stop
+    endif
+  endif           ! End of SIMTYPE if
 !
 !--Remove any center of mass displacement
 !
-         CALL relax_frame
-      ENDIF           ! End of RELFLAG IF 
+  call relax_frame
 #ifdef debug
-      IF (rank.EQ.MASTER) PRINT*, 'relaxations called'
+  if (rank == MASTER) print*, 'relax_frame called'
 #endif
 !
-      END SUBROUTINE relax
+end subroutine relax

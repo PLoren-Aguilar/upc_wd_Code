@@ -1,4 +1,4 @@
-      SUBROUTINE startout
+subroutine startout
 !===========================================================================
 !
 !     This subroutine calls all the necessary subroutines in order to
@@ -10,55 +10,59 @@
 !
 !--Load modules
 !
-      USE mod_parameters, ONLY : MASTER
-      USE mod_commons, ONLY : rank, nstep_infile, SIMTYPE, relflag, nprocs,&
-                              nbody1, nbody2
+  use mod_parameters, only : MASTER
+  use mod_commons,    only : rank, nstep_infile, SIMTYPE, relflag,  &
+                             nprocs, nbody1, nbody2, tnow
 !
 !--Force to declare EVERYTHING
 !
-      IMPLICIT NONE
+  implicit none
 !
 !--Local variables
 !
 #ifdef openmp
-      INTEGER :: OMP_GET_THREAD_NUM, OMP_GET_NUM_THREADS
+  integer :: OMP_GET_THREAD_NUM, OMP_GET_NUM_THREADS
 #endif
 !
 !--Read code parameters needed for startup
 !
-      CALL inparams
+  call inparams
 #ifdef debug
-      IF (rank == MASTER) PRINT*, 'imparams called'
+  if (rank == MASTER) print*, 'imparams called'
 #endif
 !
 !--Read SPH initial data
 !
-      CALL indata
+  call indata(0)
 #ifdef debug
-      IF (rank == MASTER) PRINT*, 'indata called'
+  if (rank == MASTER) print*, 'indata called'
 #endif
 !
 !--Print simulation summary
 !
-      IF (rank == MASTER) THEN
-         PRINT*, '====================================================='
-         PRINT*, '            SIMULATION INFORMATION'
-         PRINT*, ''
-         WRITE(*,'(a,i4.4,a)')'Starting from bodi',nstep_infile,'.out'
-         WRITE(*,'(a,i1,a,L1)') 'Number of WDs = ',SIMTYPE
-         WRITE(*,'(a,L1)') 'Relaxation = ', RELFLAG
+  if (rank == MASTER) then
+     print*, '====================================================='
+     print*, '            SIMULATION INFORMATION'
+     print*, ''
+     write(*,'(a,i4.4,a)')'Starting from bodi',nstep_infile,'.out'
+     write(*,'(a,1ES12.4)')'Starting from time=',tnow
+     write(*,'(a,i1,a,L1)') 'Number of WDs = ',SIMTYPE
+     write(*,'(a,L1)') 'Relaxation = ', RELFLAG
 #ifdef MPI
-         WRITE(*,'(a,i3)') 'Number of MPI processes = ',nprocs
+     write(*,'(a,i3)') 'Number of MPI processes = ',nprocs
 #endif
 #ifdef openmp
 !$OMP PARALLEL
-         IF (OMP_GET_THREAD_NUM() == 0) WRITE(*,'(a,i3)')               &
-            'Number of OpenMP processes = ', OMP_GET_NUM_THREADS()
-!$OMP END PARALLEL
+     if (OMP_GET_THREAD_NUM() == 0) write(*,'(a,i3)')               &
+        'Number of OpenMP processes = ', OMP_GET_NUM_THREADS()
+!$OMP end PARALLEL
 #endif
-         WRITE(*,'(a,i6)') 'Number of particles wd #1 = ', nbody1
-         WRITE(*,'(a,i6)') 'Number of particles wd #2 = ', nbody2
-         PRINT*,'======================================================'
-      ENDIF
-!
-      END SUBROUTINE startout
+#ifndef global
+     write(*,'(a)') 'With individual time-steps'
+#endif
+     write(*,'(a,i6)') 'Number of particles wd #1 = ', nbody1
+     write(*,'(a,i6)') 'Number of particles wd #2 = ', nbody2
+     print*,'======================================================'
+  endif
+
+end subroutine startout

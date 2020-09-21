@@ -1,4 +1,4 @@
-      SUBROUTINE diagnostics(t1,t2)
+subroutine diagnostics
 !===========================================================
 !  This subroutine outputs all the necessary information
 !
@@ -7,40 +7,57 @@
 !
 !--Load modules
 !
-      USE mod_parameters, ONLY : MASTER
-      USE mod_commons, ONLY : globnmin, globnmax, globnvec, globmax,    &
-      globdone, nstep, nout, rank, nCO, nHe, ndead
+  use mod_parameters, only : MASTER, maxstep, log2, maxstep
+  use mod_commons,    only : globnmin, globnmax, globnvec, globmax,   &
+  globdone, nstep, nout, rank, nCO, nHe, ndead, step, partype, nbody, &
+  dtmax, nactive, nstep_infile
 !
 !--Force to declare EVERYTHING
 !
-      IMPLICIT NONE
+  IMPLICIT NONE
 !
-!--I/O variables
+!--Local variables
 !
-      REAL, INTENT(IN) :: t1, t2
+  integer, dimension(30) :: nbin
+  integer                :: n, p, i
+  real :: dt
 !
-      IF (rank.EQ.MASTER) THEN
-         CALL energy
+  if (rank == MASTER) then
+    if (mod(nstep,nout) == 0) then
+      CALL energy
+      CALL outdata
+
+      print*, ''
+      print*, '============================================'
+      write(*,'(a,i4.4,a)') 'bodi', nstep/nout,'.out written'
+      print*, ''
+      write(*,'(a,i6,a,i6,a,i6)') 'NMIN:',globnmin, ' NMAX:',       &
+            globnmax,' AVG:',globnvec
+      write(*,'(a,i7)') 'Notdone=',globdone
+      write(*,'(a,1pe12.4,a)') 'Maxdiff',globmax*100.,' %'
+      print*, ''
+      write(*,'(a,i6,a,i6,a,i6)') 'nCO=',nCO,' nHe=',nHe,           &
+            ' ndead=',ndead
+      print*, '============================================'
+      print*, ''
+    endif
+  endif
 !
-         IF (MOD(nstep,nout).EQ.0) THEN
-            CALL outdata
+!--Print timestepping information
 !
-            PRINT*, ''
-            PRINT*, '============================================'
-            WRITE(*,'(a,i4.4,a)') 'bodi',nstep/nout+1,'.out written'
-            PRINT*, ''
-            WRITE(*,'(a,i6,a,i6,a,i6)') 'NMIN:',globnmin, ' NMAX:',     &
-                  globnmax,' AVG:',globnvec
-            WRITE(*,'(a,i7)') 'Notdone=',globdone
-            WRITE(*,'(a,1pe12.4,a)') 'Maxdiff',globmax*100.,' %'
-            PRINT*, ''
-            WRITE(*,'(a,1pe12.4)') 'Average iteration time=',           &
-                  (t2-t1)/nout
-            WRITE(*,'(a,i6,a,i6,a,i6)') 'nCO=',nCO,' nHe=',nHe,         &
-                  ' ndead=',ndead
-            PRINT*, '============================================'
-            PRINT*, ''
-         ENDIF
-      ENDIF
+  if ((rank == MASTER) .and. dtmax /= 0) then
+    nbin = 0
+    do p=1,nbody
+      if (partype(p) == 2) cycle
+      dt      = dtmax*float(step(p))/float(maxstep)
+      n       = int(log10(dtmax/dt)/log10(2.)) + 1          
+      nbin(n) = nbin(n) + 1
+    enddo
+    write(*,'(a)') '         Timestep distribution'
+    write(*,'(a)') '========================================'
+    do i=1,30
+      write(*,'(i2,i11,1pe12.4,i7)') i, maxstep/2**(i-1),dtmax/2**(i-1), nbin(i)
+    enddo
+  endif
 !
-      END SUBROUTINE diagnostics
+end subroutine diagnostics

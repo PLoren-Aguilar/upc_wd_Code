@@ -1,4 +1,4 @@
-      SUBROUTINE separate
+subroutine separate
 !========================================================================
 !
 !  This subroutine is a call to various analysis subroutines
@@ -8,53 +8,53 @@
 !
 !--Load modules
 !
-      USE mod_commons, ONLY : nstep, nout
+  use mod_commons, only : nstep, nout
 ! 
 !--Force to declare EVERYTHING
 !
-      IMPLICIT NONE
+  implicit none
 !
 !--Startout the code reading the necessary data files and parameters
 !
-      CALL startout
+  call startout
 !
 !--Analize the results
 !
-      CALL separation
+  call separation
 !
 !--Write results
 !
-      nstep = 1
-      nout  = 1
-      CALL outdata
+  nstep = 1
+  nout  = 1
+  call outdata
 !
-      END SUBROUTINE separate
+end subroutine separate
 !
-      SUBROUTINE separation
+subroutine separation
 !
 !--Load modules
 !
-      USE mod_commons, ONLY : xyzhm, vxyzut, rho, nbody1, nbody
-      USE mod_parameters, ONLY : unm, unl, unt, uden
+  use mod_commons,    only : xyzhm, vxyzut, rho, nbody1, nbody
+  use mod_parameters, only : unm, unl, unt, uden
 !
 !--Force to declare EVERYTHING
 !
-      IMPLICIT NONE
+  implicit none
 !
 !--Local definitions
 !
-      REAL :: masa ,mass, dens, temp, rin, rout, rmax, dr, r,        &
-                 xcm, ycm ,zcm, angx, angy, angz, Imom, RWD, omega, v
-      INTEGER :: p, k, n
+  real    :: masa ,mass, dens, temp, rin, rout, rmax, dr, r,        &
+          xcm, ycm ,zcm, angx, angy, angz, Imom, RWD, omega, v
+  integer :: p, k, n
 !
 !--Position all data around the centre of the primary star
 !
-      DO p = 1, nbody1
-         xyzhm(1,p) = xyzhm(1,p) - 0.03
-      ENDDO
+  do p = 1, nbody1
+    xyzhm(1,p) = xyzhm(1,p) - 0.03
+  enddo
 !
-      DO p = nbody1+1,nbody
-         xyzhm(1,p) = xyzhm(1,p) + 0.03
-      ENDDO
+  do p = nbody1+1,nbody
+    xyzhm(1,p) = xyzhm(1,p) + 0.03
+  enddo
 
-      END SUBROUTINE separation
+end subroutine separation

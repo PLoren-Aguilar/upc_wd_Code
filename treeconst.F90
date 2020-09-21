@@ -10,7 +10,7 @@
       USE mod_parameters, ONLY : ndim, MASTER, hmax, hmin
       USE mod_commons,    ONLY : xyzhm, gxyzu, eps, eps3, nb, globnmin, &
       globnmax, globnvec, partype, nbody, npart, factor, rank, nstep,   &
-      nout, nbmax, nbmin, mmax, ierr, size
+      nout, nbmax, nbmin, mmax, ierr, size, istep, step, istep0, nstep
                                   
 !
 !--Force to declare EVERYTHING
@@ -53,8 +53,10 @@
                  message, icbrt, icbrt1, nhash, jj, ibin, itemp, ibin1, &
                  nj, np, mm, iz, iy, ix, nc, lllx, llux, llly, lluy,    &
                  lllz, lluz, llx, lux, lly, luy, llz, luz, jx, icjx, jy,&
-                 icjy, jz, icjz, lk, nwal, mlocal, newlist
-      INTEGER :: nvec, nsig, nmin, nmax, notdone, AllocateStatus, DeallocateStatus
+                 icjy, jz, icjz, lk, nwal, mlocal, newlist, niter
+      INTEGER :: nvec, nsig, nmin, nmax, notdone, AllocateStatus=0,     &
+                 DeallocateStatus=0
+      INTEGER, PARAMETER :: itermax=1000
 #ifdef openmp 
       INTEGER :: OMP_GET_THREAD_NUM
 #endif
@@ -407,7 +409,7 @@
 !
 !--find radius and maximum h
 !
-               rr           = dsqrt(difx*difx+dify*dify+difz*difz)
+               rr           = sqrt(difx*difx+dify*dify+difz*difz)
                qrad(new)    = max(fll*rr+qrad(l),fl*rr+qrad(ll))
                xyzhm(4,new) = max(xyzhm(4,l),xyzhm(4,ll))
                hnode(new)   = max(hnode(l),hnode(ll))
@@ -472,14 +474,16 @@
 !$OMP PARALLEL DEFAULT(none) shared(rx,ry,rz,nb,eps,eps3)                   &
 !$OMP shared(nroot,qrad,xyzhm,idau,em,hnode,accpar,isib,qxx,qyy,qzz)        &
 !$OMP shared(qxy,qzx,qyz,gxyzu,partype,factor,nbody,nbmax,nbmin,rank)       &
+!$OMP shared(istep0,istep,step,nstep)                                       &
 !$OMP private(m,s,nlist,p,q,rrx,rry,rrz,hm,mlocal)                          &
 !$OMP private(pot,eps2,nnodes,node,knodes,i,n,hn,dxi,dyi,dzi,rr2)           &
 !$OMP private(rcomp2,qradn2,j,isubnode,nearl,k,rr,rr05,newnearl,newlist)    &
-!$OMP private(frx,fry,frz,frxl,fryl,frzl,potl,hup,hdown,hnew,done)
+!$OMP private(frx,fry,frz,frxl,fryl,frzl,potl,hup,hdown,hnew,done,niter)
 !$OMP DO SCHEDULE(runtime)
       partloop : DO mlocal = 1, factor
          m = mlocal + rank*factor
          IF ((m > nbody) .OR. (partype(m) == 2)) CYCLE
+         !IF ((nstep /=0) .AND. (istep0(m) + step(m) /= istep)) CYCLE
 !
 !--Initialize quantities
 !
@@ -538,7 +542,7 @@
                      frz = frz + frzl
                      pot = pot + potl
                   ENDIF
-                  IF (dsqrt(rr2) < 0.5*(dsqrt(hm)+dsqrt(hn))) THEN
+                  IF (sqrt(rr2) < 0.5*(sqrt(hm)+sqrt(hn))) THEN
                      nlist        = nlist + 1
                      nearl(nlist) = n
                   ENDIF
@@ -568,34 +572,39 @@
 !
 !--Store neighbour list
 !
-         !IF (nlist <= 1) THEN
-            ! If the particle has no neighbours, kill it
-            !gxyzu(4,mlocal) = 123456789 ! Mark the particles to be  killed
          IF ((nlist >= nbmax) .OR. (nlist <= nbmin)) THEN
            ! If the particle has an excess or too few neighbours we will use a
            ! bisection method to recalculate its smoothing length,
            ! so it has a propper number of neighbours
            PRINT*, 'Switching to bisection for particle',m,xyzhm(1,m),  &
            xyzhm(2,m),xyzhm(3,m),xyzhm(4,m),nlist
-           hup   = 10*hmax
-           hdown = hmin
+           if (nlist > nbmax) then
+             hup   = xyzhm(4,m)
+             hdown = hmin
+           elseif (nlist < nbmin) then
+             hup   = hmax
+             hdown = xyzhm(4,m)
+           endif
            done  = .false.
-           DO WHILE (done.EQV..false.)
+           niter = 0
+           iterloop : DO WHILE (done.EQV..false.)
+             niter = niter+1
+!
              hnew = 0.5*(hup+hdown)
              newlist = 0
              DO p=1,nbody
-               hn = xyzhm(4,p)
+               hn  = xyzhm(4,p)
                dxi = xyzhm(1,p)-xyzhm(1,m)
                dyi = xyzhm(2,p)-xyzhm(2,m)
                dzi = xyzhm(3,p)-xyzhm(3,m)
                rr2 = dxi**2 + dyi**2 + dzi**2
-               IF (dsqrt(rr2) < 0.5*(hnew+hn)) THEN
+               IF (sqrt(rr2) < 0.5*(hnew+hn)) THEN
                   newlist = newlist + 1
                   newnearl(newlist) = p
                ENDIF
              ENDDO
 !
-             IF ((newlist < nbmax) .AND. (newlist > nbmin)) THEN
+             IF ((newlist <= nbmax) .AND. (newlist >= nbmin)) THEN
                done = .true.
                PRINT*, 'Bisection ended', m,' hnew=,',hnew, ' nlist=',newlist
              ELSEIF (newlist >= nbmax) THEN
@@ -605,7 +614,13 @@
                hup   = hup
                hdown = hnew
              ENDIF
-           ENDDO
+!
+! Kill the particle if the iteration fails
+             IF (niter > itermax) THEN
+               gxyzu(4,mlocal) = 123456789
+               EXIT iterloop
+             ENDIF
+           ENDDO iterloop
 !
            nb(1,mlocal) = newlist
            DO s=1,newlist
@@ -643,15 +658,15 @@
 !--Transfer gxyzu across MPI processess
 !
 #ifdef MPI
-      sentarray = 0.0
+      sentarray    = 0.0
       receivearray = 0.0
 !$OMP PARALLEL DEFAULT(none) shared(sentarray,gxyzu,factor) &
 !$OMP private(p,k)
 !$OMP DO SCHEDULE(runtime)
       DO p = 1, factor
-         DO k = 1, ndim+1
-            sentarray((p-1)*(ndim+1) + k) = gxyzu(k,p)
-         ENDDO
+        DO k = 1, ndim+1
+          sentarray((p-1)*(ndim+1) + k) = gxyzu(k,p)
+        ENDDO
       ENDDO
 !$OMP END DO
 !$OMP END PARALLEL
@@ -660,13 +675,15 @@
                       receivearray,(ndim+1)*factor,MPI_DOUBLE_PRECISION,&
                       MPI_COMM_WORLD,ierr)
 !
-!$OMP PARALLEL DEFAULT(none) shared(receivearray,gxyzu,nbody) &
+!$OMP PARALLEL DEFAULT(none) shared(receivearray,gxyzu,nbody,istep,istep0,step,nstep) &
 !$OMP private(p,k)
 !$OMP DO SCHEDULE(runtime)
       DO p = 1, nbody
-         DO k = 1, ndim+1
+        !IF ((nstep == 0) .OR. (istep0(p) + step(p) == istep)) THEN
+          DO k = 1, ndim+1
             gxyzu(k,p) = receivearray((p-1)*(ndim+1) + k)
-         ENDDO
+          ENDDO
+        !ENDIF
       ENDDO
 !$OMP END DO
 !$OMP END PARALLEL
@@ -675,15 +692,16 @@
 !--Kill particles if necessary
 !
       notdone = 0
-!$OMP PARALLEL DEFAULT(none) shared(nbody,gxyzu,partype) private(p) &
-!$OMP reduction(+:notdone)
+!$OMP PARALLEL DEFAULT(none) shared(nbody,gxyzu,partype,istep0,istep,step,nstep) &
+!$OMP private(p) reduction(+:notdone)
 !$OMP DO SCHEDULE(runtime)
       DO p=1,nbody
-         IF (gxyzu(4,p) == 123456789) THEN
-            !PRINT*, p,gxyzu(4,p)
+        !IF ((nstep == 0) .OR. (istep0(p) + step(p) == istep)) THEN
+          IF (gxyzu(4,p) == 123456789) THEN
             notdone    = notdone + 1
             partype(p) = 2
-         ENDIF
+          ENDIF
+        !ENDIF
       ENDDO
 !$OMP END DO
 !$OMP END PARALLEL
@@ -722,11 +740,9 @@
        globnvec  = nvec
 #endif
 !
-        IF (MOD(nstep,nout).EQ.0) THEN
-           IF (rank == MASTER) THEN
-              globnvec = INT(FLOAT(globnvec)/FLOAT(nbody))
-           ENDIF
-        END IF
+        IF (rank == MASTER) THEN
+          globnvec = INT(FLOAT(globnvec)/FLOAT(nbody))
+        ENDIF
 !
       END SUBROUTINE treeconst
 !
@@ -738,11 +754,11 @@
 !
 !--I/O Variables
 !      
-      REAL(8), INTENT(IN)  :: difx, dify, difz, emn, eps, eps3 
-      REAL(8), INTENT(OUT) :: frx, fry, frz, pot
+      real, INTENT(IN)  :: difx, dify, difz, emn, eps, eps3 
+      real, INTENT(OUT) :: frx, fry, frz, pot
 !
 !--Local variables
-      REAL(8) :: rr, rr05, fp, ga, u, uu2, u3 
+      real :: rr, rr05, fp, ga, u, uu2, u3 
 !
       frx  = 0.0d0
       fry  = 0.0d0
@@ -752,7 +768,7 @@
 !
       IF (rr.EQ.0.0d0) GOTO 205
 !
-      rr05 = dsqrt(rr)
+      rr05 = sqrt(rr)
       fp   = 1d0/rr05
       ga   = 1d0/rr05/rr
       u    = rr05/eps
@@ -790,13 +806,13 @@
 !
 !--I/O Variables
 !
-      REAL(8), INTENT(IN)  :: difx, dify, difz, emn, qxxn, qyyn, qzzn,  &
+      real, INTENT(IN)  :: difx, dify, difz, emn, qxxn, qyyn, qzzn,  &
                               qxyn, qzxn, qyzn
-      REAL(8), INTENT(OUT) :: frx, fry, frz, pot
+      real, INTENT(OUT) :: frx, fry, frz, pot
 !
 !--Local variables
 !
-      REAL(8) :: rr, rri, rri05, ff, fpr, fpprr, tx, ty, tz, rqr, fac,  &
+      real :: rr, rri, rri05, ff, fpr, fpprr, tx, ty, tz, rqr, fac,  &
                  phimono, phiquad
 !
       frx  = 0.0d0
@@ -808,7 +824,7 @@
       IF (rr.EQ.0.0d0) GOTO 215
 !
       rri   = 1.0d0/rr
-      rri05 = dsqrt(rri)
+      rri05 = sqrt(rri)
       ff    = rri*rri05
       fpr   = (-3d0)*ff*rri
       fpprr = (-2.5d0)*fpr*rri

@@ -1,4 +1,4 @@
-       SUBROUTINE varydt
+subroutine varydt
 !===================================================================
 !  This subroutine calculates the new time step
 !
@@ -7,145 +7,165 @@
 !
 !--Load modules
 !
-      USE mod_commons, ONLY : axyzut, xyzhm, vsigmax, vxyzut, uintprev, &
-      rho, partype, nbody, dtmp_min, nstep, nstep_ini, gxyzu, enuc,     &
-      tscdyn, tscnuc, cps, dtnuc, press, css, tnow, eosflag, rank
-      USE mod_parameters, ONLY : MASTER
+  use mod_commons,    only : axyzutp, xyzhmp, vsigmax, vxyzutp, uintprev,                         &
+                             rho, partype, nbody, nstep, nstep_ini, gxyzu, enuc, tscdyn,          &
+                             tscnuc, cps, dtnuc, press, css, tnow, eosflag, rank, RELFLAG,        &
+                             step, dtmax, istep, istep0, nactive, rank, SIMTYPE, active, nextstep,&
+                             SYNC
+  use mod_parameters, only : MASTER, maxstep, log2
 !
 !--Force to declare EVERYTHING
 !
-      IMPLICIT NONE
+  implicit none
 !
 !--Local definitions
 !
-      REAL :: fa, ft, dt1, dt2, dt3, dt4, dt5, dt6, dtmpmin_old, denom
-      REAL, PARAMETER :: dtfact=0.3, sigma=1.0, dtlow = 1.e-5
-      INTEGER :: p
+  real :: fa, ft, dt, dt1, dt2, dt3, dt4, dt5, dt6, dtmpmin_old, denom, dtmin, frac, dtnew
+  real, parameter :: dtfact=0.3, sigma=1.0, dtlow = 1.e-8
+  integer :: p, n, newstep, syncstep, minstep
 !
-!--Save old time-step for later use and reset time-step
+!--If reached the end of a integration cycle, activate the flag to stop
 !
-      dtmpmin_old = dtmp_min
+  if (istep == maxstep) SYNC = .true.
 !
 !--New time-step calculation
 !
-      dtmp_min = 1.0e30
-      dt1 = 1.0e30
-      dt2 = 1.0e30
-      dt3 = 1.0e30
-      dt4 = 1.0e30
-      dt5 = 1.0e30
-      dt6 = 1.0e30
-!$OMP PARALLEL DEFAULT(none) shared(axyzut,xyzhm,vsigmax,vxyzut)     &
-!$OMP shared(nbody,uintprev,rho,nstep,partype) private(p,fa) &
-!$OMP reduction(MIN:dt1,dt2,dt3)
-!$OMP DO SCHEDULE(runtime)
-      partloop : DO p=1,nbody
-#ifdef Helium
-         IF (partype(p) /= 0) CYCLE
-#else
-         IF (partype(p) == 2) CYCLE
-#endif
+!$omp parallel default(none) shared(axyzutp,xyzhmp,vsigmax,vxyzutp)      &
+!$omp shared(nbody,uintprev,rho,partype,istep0,step,istep,nstep)         &
+!$omp shared(RELFLAG,dtmax,rank,SIMTYPE) private(p,fa,dtmin,newstep,syncstep) &
+!$omp private(dt1,dt2,dt3,dt4,ft,frac,n,dtnew)
+!$omp do schedule(runtime)
+  partloop : do p=1,nbody
+     if ((nstep /=0) .and. (istep0(p) + step(p) /= istep)) cycle
+     if (partype(p) == 2) cycle
+!#ifdef Helium
+!    if (partype(p) /= 0) cycle
+!#else
+!    if (partype(p) == 2) cycle
+!#endif
+
+! Reset all time-scales
+     dt1 = 1.0e30
+     dt2 = 1.0e30
+     dt3 = 1.0e30
+     dt4 = 1.0e30
 
 ! Dynamical Courant condition
-         fa = SQRT(axyzut(1,p)*axyzut(1,p) + axyzut(2,p)*axyzut(2,p) +  &
-            axyzut(3,p)*axyzut(3,p))
-         IF (fa /= 0.0) THEN
-            dt1 = MIN(SQRT(xyzhm(4,p)/fa),dt1)
-         ENDIF
+     fa = sqrt(axyzutp(1,p)*axyzutp(1,p) + axyzutp(2,p)*axyzutp(2,p) + axyzutp(3,p)*axyzutp(3,p))
+     if (fa /= 0.0) then
+        dt1 = min(sqrt(xyzhmp(4,p)/fa),dt1)
+     endif
 
 ! Viscous signal condition
-         IF (vsigmax(p) /= 0.0) THEN
-            dt2 = MIN(sigma*xyzhm(4,p)/vsigmax(p),dt2)
-         ENDIF
-
-      ENDDO partloop
-!$OMP END DO
-!$OMP END PARALLEL
-      dtmp_min = dtfact*MIN(dt1,dt2)
-!
-!--Return if first simulation step
-!
-      IF (nstep == nstep_ini) RETURN
-!
-!--Thermal Courant condition
-!
-!$OMP PARALLEL DEFAULT(none) shared(vxyzut,uintprev,rho,nbody,partype)  &
-!$OMP shared(axyzut,eosflag) private(p,ft) reduction(MIN:dt3,dt4)
-!$OMP DO SCHEDULE(runtime)
-      partloop2 : DO p = 1,nbody
-#ifdef Helium
-         IF (partype(p) /= 0) CYCLE
-#else
-         IF (partype(p) == 2) CYCLE
-#endif
+     if (vsigmax(p) /= 0.0) then
+        dt2 = min(sigma*xyzhmp(4,p)/vsigmax(p),dt2)
+     endif
 
 ! Thermal energy condition
-         ft  = ABS(axyzut(4,p))
-         IF (ft /= 0.0) THEN
-
-! Limit the minimum time step given by the energy condition. If the predicted
-! time-step becomes too small, the particle is killed
-            IF (vxyzut(4,p)/ft >= dtlow) THEN
-               dt3 = MIN(dt3,vxyzut(4,p)/ft)
-            ELSE
-               partype(p) = 2
-            ENDIF
-         ENDIF
+     if (RELFLAG.eqv..false.) then
+        ft = abs(axyzutp(4,p))
+        if ((ft /= 0.0) .and. (vxyzutp(4,p) > 0.0)) then
+           dt3 = min(dt3,vxyzutp(4,p)/ft)
+        endif
 
 ! Temperature condition
-         ft  = ABS(axyzut(5,p))
-         IF (ft /= 0.0) THEN
 
-! Same thing with temperature
-            IF (vxyzut(5,p)/ft >= dtlow) THEN
-               dt4 = MIN(dt4,vxyzut(5,p)/ft)
-            ELSE
-               partype(p) = 2
-            ENDIF
-         ENDIF
-      ENDDO partloop2
-!$OMP END DO
-!$OMP END PARALLEL
-      dt3 = dtfact*dt3
-      dt4 = dtfact*dt4
-      dtmp_min = MIN(dtmp_min,dt3)
-      dtmp_min = MIN(dtmp_min,dt4)
-!
-!--Typical time-scales calculation
-!
-!$OMP PARALLEL DEFAULT(none) shared(nbody,tscnuc,cps,vxyzut,enuc,dtnuc) &
-!$OMP shared(tscdyn,press,gxyzu,css,rho) private(p,denom) reduction(MIN:dt5,dt6)
-!$OMP DO SCHEDULE(runtime)
-      partloop3 : DO p=1,nbody
+        ft = abs(axyzutp(5,p))
+        if (ft /= 0.0) then
+          dt4 = min(dt4,vxyzutp(5,p)/ft)
+        endif
+     endif
 
-! Nuclear time-scale
-         IF ((dtnuc(p) > 0.0) .AND. (enuc(p) > 0.0)) THEN
-            tscnuc(p) = cps(p)*vxyzut(5,p)/enuc(p)*dtnuc(p)
-         ELSE
-            tscnuc(p) = 0.0
-         ENDIF
-         dt5 = MIN(dt5, tscnuc(p))
+! Calculate the shortest time-scale
+     if ((dt1 == 0) .and. (dt2 /= 0)) then
+        dtmin = dt2
+     elseif ((dt1 /= 0) .and. (dt2 == 0)) then
+        dtmin = dt1
+     else
+        dtmin = min(dt1,dt2)
+     endif
+     dtmin = min(dtmin,dt3)
+     dtmin = min(dtmin,dt4)
+     dtmin = dtfact*dtmin
+     if (dtmin > dtmax) then
+        dtmin = dtmax
+        !if (rank == MASTER) then
+        !  write(*,*) 'ERROR in time-steps. dtmin > dtmax !!!',dt1,dt2,dt3,dt4,dtmin,dtmax
+        !  write(*,*) 'This is **not** the optimal way to run'
+        !  stop
+        !endif
+     elseif (dtmin < dtlow) then
+        partype(p) = 2
+     endif
 
-! Dynamical time-scale
-         denom = DSQRT(gxyzu(1,p)*gxyzu(1,p) + gxyzu(2,p)*gxyzu(2,p)+   &
-                 gxyzu(3,p)*gxyzu(3,p))*rho(p)*css(p)
-         IF (denom /= 0.0) THEN
-             tscdyn(p) = press(p)/denom
-         ELSE
-             tscdyn(p) = 0.0
-         ENDIF
-         dt6 = MIN(dt6, tscdyn(p))
+! Update the individual time-step
+     frac = dtmin/(dtmax*step(p)/maxstep)
+     if (frac >= 2.) then
+        syncstep = maxstep - istep
+        if (syncstep == 0) syncstep = maxstep
+        newstep  = 2.*step(p)
+        if (mod(syncstep,newstep) == 0) then
+              step(p) = min(newstep,maxstep)
+        endif
+     elseif (frac <= 0.5) then
+        if (dtmin <= 0) then
+           PRint*, 'dtmin zeroooo',dt1,dt2,dt3,dt4
+           stop
+        endif
+        dtnew = dtmax*step(p)/maxstep*frac
+        n = int(log10(dtmax/dtnew)/log10(2.0)) + 1
+        if (n > 30) then  ! Kill the particle if the time-step is too small
+           partype(p) = 2
+        else
+           step(p) = maxstep/2**(n-1)
+        endif
+     endif
 
-      ENDDO partloop3
-!$OMP END DO
-!$OMP END PARALLEL
+! Update the present time-step for the particle
+     if (istep < maxstep) then
+        istep0(p) = istep
+     elseif (istep == maxstep) then
+        istep0(p) = 0
+     else
+        write(*,*) 'Varydt: ERROR with istep !!!'
+        stop
+     endif
+  enddo partloop
+!$omp end do
+!$omp end parallel
 !
-!--Print time-scales
+!--Now search for the next time-step. Careful, you need to find the
+!  smallest istep !!!
 !
-      IF (rank == MASTER) THEN 
-        OPEN (1,FILE='timescales.out',STATUS='unknown',access='append')
-        WRITE(1,'(i7,7(1pe13.5))') nstep, tnow, dt1, dt2, dt3, dt4, dt5, dt6
-        CLOSE (1)
-      ENDIF
-! 
-      END SUBROUTINE varydt
+  nextstep = maxstep
+  minstep  = maxstep
+!$omp parallel default(none) shared(nbody,partype,istep0,istep,step) private(p,newstep) &
+!$omp reduction(min:nextstep) reduction(min:minstep) 
+!$omp do schedule(runtime)
+  do p = 1,nbody
+     if (partype(p) == 2) cycle
+     if (istep < maxstep) then
+        newstep  = istep0(p)+step(p)
+     elseif (istep == maxstep) then
+        newstep  = step(p)
+     endif
+     nextstep = min(nextstep,newstep)
+     minstep  = min(minstep,step(p))
+  enddo 
+!$omp end do
+!$omp end parallel
+  istep = nextstep
+  if (nextstep > maxstep) then
+     write(*,*) 'Something wrong with nextstep. nextstep > maxstep'
+     stop
+  endif
+!
+!--If using global time-steps, set all particles to the minimum
+!  time-step
+#ifdef global
+  do p=1,nbody     
+     if (partype(p) == 2) cycle
+     step(p) = minstep
+  enddo
+#endif
+end subroutine varydt

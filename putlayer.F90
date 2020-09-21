@@ -1,125 +1,163 @@
-      SUBROUTINE putlayer
+subroutine putlayer
 !========================================================================
-!  This subroutine is the main driver of the code. It evolves the system
-!  in time using a given integrator method, and prints diagnostics,
-!  whenever necessary
+!  This subroutine puts a He buffer on the top of an ideally relaxed WD
 !
-!  Last revision: 15/March/2015
+!  Last revision: 05/June/2017
 !========================================================================
 !
 !--Load modules
 !
-      USE mod_parameters
-      USE mod_commons
-      USE IFPORT
+  use mod_parameters
+  use mod_commons
+  !use ifPORT
 ! 
 !--Force to declare EVERYTHING
 !
-      IMPLICIT NONE
+  IMPLICIT NONE
 !
 !--Local variables
 !
-      REAL, DIMENSION(nel,npart) :: xss_He
-      REAL, DIMENSION(5,npart)   :: xyzhm_He, vxyzut_He
-      REAL, DIMENSION(npart)     :: rho_He, fh_He, ka1_He, star_He
-      REAL :: rmax, dr2, mHe, xc, yc, zc
-      INTEGER, DIMENSION(npart) :: partype_He
-      INTEGER :: m, p, k, num,  number
-      CHARACTER(30) :: filename
+  real(4), dimension(nel,1000000) :: xss_He
+  real(4), dimension(5,100000)   :: xyzhm_He, vxyzut_He
+  real(4), dimension(1000000)     :: rho_He, fh_He, ka1_He
+  real(4) :: rmax, rdown, rup, rad, theta, phi, mHe, xc, yc, zc
+  integer(1), dimension(1000000) :: partype_He, star_He
+  integer, dimension(1000000) :: step_He
+  integer :: m, p, k, num, ntot, AllocateStatus=0, DeAllocateStatus=0
+  character(30) :: filename
+!
+!--Declare structures in order to dump data
+!
+  type :: iodata
+     real(4), dimension(ndim+2) :: ioxyzhm
+     real(4), dimension(ndim+2) :: iovxyzut
+     real(4) :: iorho
+     real(4) :: ioka1
+     integer :: iostep
+     integer(1) :: iopartype
+     integer(1) :: iostar
+  end type iodata
+  type(iodata), dimension(:), allocatable :: data_array
+!
+  type :: ciodata
+     real(4), dimension(nel) :: comp
+  end type ciodata
+  type(ciodata), dimension(:), allocatable :: cdata_array
 !
 !--Startout the code reading the necessary data files and parameters
 !
-      CALL startout
+  nprocs = 1
+  CALL startout
 !
 !--How many He particles do you want in the spherical layer? 
 !
-      WRITE(*,*) 'How many He particles do you want?'
-      READ(*,*) nHe 
-      WRITE(*,*) 'Mass of the He layer (in solar masses)?'
-      READ(*,*) mHe 
+  write(*,*) 'How many He particles do you want?'
+  READ(*,*) nHe 
+  write(*,*) 'Mass of the He layer (in solar masses)?'
+  READ(*,*) mHe 
 !
 !--Find out the maximum radius of the WD
 !
-      rmax = 0.0
-      DO p=1,nbody
-         rmax = MAX(rmax,xyzhm(1,p)**2 + xyzhm(2,p)**2 + xyzhm(3,p)**2)
-      ENDDO
+  rmax = 0.15*0.15
+  !do p=1,nbody
+  !  rmax = MAX(rmax,xyzhm(1,p)**2 + xyzhm(2,p)**2 + xyzhm(3,p)**2)
+  !enddo
 !
 !--Now put the spherical layer of He particles around the WD
 !
-      DO p=1,nHe
-         dr2 = 1.0d30
-         CALL SEED(p*time())
-         DO WHILE (dr2.LT.rmax.OR.dr2.GT.1.5*rmax)
-!            xc  = 2.*DSQRT(rmax)*RAND()-DSQRT(rmax)
-!            yc  = 2.*DSQRT(rmax)*RAND()-DSQRT(rmax)
-!            zc  = 2.*DSQRT(rmax)*RAND()-DSQRT(rmax)
-            xc = RAND()*SIN(2.0*pi*RAND())*COS(2.0*pi*RAND())
-            yc = RAND()*SIN(2.0*pi*RAND())*SIN(2.0*pi*RAND())
-            zc = RAND()*COS(2.0*pi*RAND())
-            dr2 = xc*xc+yc*yc+zc*zc
-         ENDDO
-         xyzhm_He(1,p) = xc
-         xyzhm_He(2,p) = yc
-         xyzhm_He(3,p) = zc
+  rdown = sqrt(rmax) + 0.005
+  rup   = 0.05
+  call srand(time())
+  do p=1,nHe
+    rad   = rdown + rand()*rup
+    theta = 2.0*pi*rand()
+    phi   = acos(1.0-2.0*rand())
+    xc = rad*sin(phi)*cos(theta)
+    yc = rad*sin(phi)*sin(theta)
+    zc = rad*cos(phi)
+    xyzhm_He(1,p) = xc
+    xyzhm_He(2,p) = yc
+    xyzhm_He(3,p) = zc
 !
-         vxyzut_He(1,p) = 0.0
-         vxyzut_He(2,p) = 0.0
-         vxyzut_He(3,p) = 0.0
-         vxyzut_He(4,p) = 1.0d6
+    vxyzut_He(1,p) = 0.0
+    vxyzut_He(2,p) = 0.0
+    vxyzut_He(3,p) = 0.0
+    vxyzut_He(4,p) = 1.0
+    vxyzut_He(5,p) = 1.0d7
 !
-         ka1_He(p)     = ka_min
-         fh_He(p)      = 1.
-         partype_He(p) = 1
-         star_He(p)    = 1
+    ka1_He(p)     = ka_min
+    fh_He(p)      = 1.
+    partype_He(p) = 1
+    star_He(p)    = 1
+    step_He(p)    = maxstep
 !
-         xyzhm_He(5,p) = mHe/nHe
-         rho_He(p)     = 1.0
-         xyzhm_He(4,p) = hfact*((xyzhm_He(5,p)/rho_He(p))**(1./3.))
+    xyzhm_He(5,p) = mHe/nHe
+    rho_He(p)     = 0.2
+    xyzhm_He(4,p) = hfact*(xyzhm_He(5,p)/rho_He(p))**0.333
+    do k=1,nel
+      xss_He(k,p) = 0.0
+    enddo
+    xss_He(2,p) = 1.0
+  enddo
 !
-         DO k=1,nel
-            xss_He(k,p) = 0.0
-         ENDDO
-         xss_He(2,p) = 1.0
-      ENDDO
+!--Allocate the dimension of the data structures
 !
-!--Now, write data into file
+   ntot = npart + nHe
+   ALLOCATE (data_array(ntot), STAT = AllocateStatus)
+   if (AllocateStatus /= 0) THEN
+     write(*,*) "Not enough memory for data_array!!!"
+     STOP
+   endif
 !
-      num = 2
-      WRITE(filename,'(a,i4.4,a)') 'bodi',num,'.out'
-      OPEN (UNIT=1, FILE=filename, STATUS='new')
-      WRITE(filename,'(a,i4.4,a)') 'comp',num,'.out'
-      OPEN (UNIT=2, FILE=filename, STATUS='new')
+   ALLOCATE (cdata_array(ntot), STAT = AllocateStatus)
+   if (AllocateStatus /= 0) THEN
+     write(*,*) "Not enough memory for data_array!!!"
+     STOP
+   endif
 !
-!--Write CO data
+!--Now, load CO data into I/O arrays
 !
-      number = nbody + nHe
-      WRITE(1,*) 'ASPLASH_HEADERLINE_TIME'
-      WRITE(1,*) tnow
-      WRITE(1,*) 'ASPLASH_HEADERLINE_GAMMA'
-      WRITE(1,*) '1.667'
-      WRITE(1,*) 'NPART'
-      WRITE(1,*) number
-      WRITE(2,*) tnow
-      DO p=1,nbody
-         WRITE(1,'(16(1ES12.4),i3.1,i3.1)') (xyzhm(k,p),k=1,5),rho(p),  &
-        (vxyzut(k,p),k=1,5),ka1(p),fh(p),tscdyn(p),tscnuc(p),enuc(p),   &
-         partype(p), star(p)
+   do p = 1,npart
+     data_array(p)%ioxyzhm(1:ndim+2)  = xyzhm(1:ndim+2,p)
+     data_array(p)%iovxyzut(1:ndim+2) = vxyzut(1:ndim+2,p)
+     data_array(p)%iorho              = rho(p)
+     data_array(p)%ioka1              = ka1(p)
+     data_array(p)%iostep             = step(p)
+     data_array(p)%iopartype          = partype(p)
+     data_array(p)%iostar             = star(p)
+     cdata_array(p)%comp(1:nel)       = xss(1:nel,p)
+   enddo
 !
-         WRITE(2,'(16(1ES12.4))') (xss(k,p),k=1,nel)
-      ENDDO
+!--And now, load He layer data into I/O arrays
 !
-!--Write He data
+   do p = 1,nHe
+     data_array(p+npart)%ioxyzhm(1:ndim+2)  = xyzhm_He(1:ndim+2,p)
+     data_array(p+npart)%iovxyzut(1:ndim+2) = vxyzut_He(1:ndim+2,p)
+     data_array(p+npart)%iorho              = rho_He(p)
+     data_array(p+npart)%ioka1              = ka1_He(p)
+     data_array(p+npart)%iostep             = step_He(p)
+     data_array(p+npart)%iopartype          = partype_He(p)
+     data_array(p+npart)%iostar             = star_He(p)
+     cdata_array(p+npart)%comp(1:nel)       = xss_He(1:nel,p)
+   enddo
 !
-      DO p=1,nHe
-         WRITE(1,'(16(1ES12.4),i3.1,i3.1)') (xyzhm_He(k,p),k=1,5),rho_He(p), &
-        (vxyzut_He(k,p),k=1,5),ka1_He(p),fh_He(p),0.0,0.0,0.0,          &
-        partype_He(p), star(p)
+!--Now, write data into files
 !
-         WRITE(2,'(16(1ES12.4))') (xss_He(k,p),k=1,nel)
-      ENDDO
+   num    = 2
+   Omega0 = 0.0
+   nbody  = ntot
+   ndead  = 0
+   nbody1 = ntot
+   nbody2 = 0
+   write(filename,'(a,i4.4,a)') 'bodi',num,'.out'
+   open (1, file=filename, form='unformatted', status='new')
+   write(1) tnow, ntot, nbody, ndead, nbody1, nbody2, Omega0
+   write(1) data_array
+   close(1)
 !
-      CLOSE (UNIT=1)
-      CLOSE (UNIT=2)
+   write(filename,'(a,i4.4,a)') 'comp',num,'.out'
+   open (2, file=filename, form='unformatted', status='new')
+   write(2) cdata_array
+   close(2)
 !
-      END SUBROUTINE putlayer
+end subroutine putlayer
