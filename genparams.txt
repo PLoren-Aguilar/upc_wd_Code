@@ -1,0 +1,5 @@
+10000        :: Number of particles
+0.39882      :: Total mass 
+50           :: Neghbours per particle
+10000000     :: Temperature of the particles
+0.01         :: Initial time of the simulation
