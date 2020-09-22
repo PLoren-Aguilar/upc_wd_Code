@@ -6,13 +6,6 @@ program main
 !     version supports OpenMP+MPI parallelization, the presence
 !     of a He layer and invividual time-steps
 !
-!     AUTHORS: * Jordi Isern Vilaboy
-!              * Enrique Garcia-Berro
-!              * Josep Guerrero
-!              * Pablo Loren-Aguilar
-!              * Alba Gutierrez-Pedemonte
-!              * Gabriela Aznar-Siguan
-!
 !     The code has several working modes:
 !
 !     * single: Generates a initial WD model by solving the 
