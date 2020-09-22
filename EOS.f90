@@ -1,32 +1,29 @@
-      SUBROUTINE EOS
+subroutine eos
 !========================================================================
+!     This subroutine allows to select between the different equations  
+!     of state in the code. It's important to realize tha every eos must
+!     provide at least:
 !
-!     THIS   SUBROUTINE   ALLOWS   TO  SELECT   BETWEEN  THE DIFFERENT  
-!     EQUATIONS  OF  STATE  OF  THE  CODE. IT'S IMPORTANT  TO  REALIZE  
-!     THAT  EVERY  EOS  SUBROUTINE MUST PROVIDE (AT LEAST):
+!     * Temperature, pressure, cv and speed of sound
 !
-!     * TEMPERATURE, PRESSURE, Cv AND SPEED OF SOUND
-!
-!     Last revision: 15/March/2015!
-!
+!     Last revision: 06/April/2019 
 !=========================================================================
 !
 !--Load modules
 !
-      USE mod_commons, ONLY : nbody, partype
-!
-!--Force to declare EVERYTHING
-!
-      IMPLICIT NONE
+  use mod_commons, only : nbody, partype, rho, istep0, istep, nstep_infile, step
+
+  implicit none
 !
 !--Local definitions
 !
-      INTEGER :: p
+  integer :: p
 !
-!--Call the EOS for each active particle
+!--Call the eos for each active particle
 !
-      DO p = 1, nbody
-         IF (partype(p) /= 2)  CALL degenerate2(p) 
-      ENDDO
-!
-      END SUBROUTINE EOS
+  do p = 1, nbody
+     if ((nstep_infile /= 0) .and. (istep0(p) + step(p) /= istep)) cycle
+     if (partype(p) /= 2)  call degenerate2(p)
+  enddo
+
+end subroutine eos

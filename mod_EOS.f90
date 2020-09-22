@@ -1,4 +1,4 @@
-      MODULE mod_EOS
+      module mod_eos
 !===============================================
 ! declaration for pipelining the eos routines
 !===============================================
