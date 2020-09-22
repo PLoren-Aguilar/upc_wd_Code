@@ -4,14 +4,7 @@
 !     PROGRAM FOR HYDRODYNAMICAL CALCULATIONS USING SPH AND A 
 !     BINARY TREE FOR GRAVITY AND NEIGHBOR SEARCHING. THE PRESENT
 !     VERSION SUPPORTS OpenMP+MPI PARALLELIZATION
-!
-!     AUTHORS: * Jordi Isern Vilaboy
-!              * Enrique Garcia-Berro
-!              * Josep Guerrero
-!              * Pablo Loren-Aguilar
-!              * Alba Gutierrez-Pedemonte
-!              * Gabriela Aznar-Siguan
-!
+
 !     The code has tree working modes:
 !
 !     * single: Generates a initial WD model by solving the 
